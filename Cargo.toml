@@ -1,13 +1,13 @@
 [package]
 name = "wookie"
-version = "0.1.0"
+version = "0.1.1"
 description = "A very small and fast executor for one Future on one thread. Lightweight enough to have many of them."
 keywords = ["async", "futures", "executor", "no-std"]
-categories = ["asynchronous", "concurrency", "no-std", "tests"]
+categories = ["asynchronous", "concurrency", "no-std"]
 authors = ["James Laver <james.laver@gmail.com>"]
 homepage = "https://github.com/irrustible/wookie"
 repository = "https://github.com/irrustible/wookie"
-documentation = "https://docs.rs/futures-micro"
+documentation = "https://docs.rs/wookie"
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
