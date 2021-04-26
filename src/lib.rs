@@ -37,6 +37,9 @@
 //! Warning: I mean it when I say this is for one thread. I can't tell
 //! you exactly what will happen if you wake it on another thread, but
 //! it probably won't be good!
+
+#![no_std]
+
 use core::future::Future;
 use core::mem::transmute;
 use core::pin::Pin;
