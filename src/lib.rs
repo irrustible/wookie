@@ -1,5 +1,5 @@
-//! A very small and fast executor for one Future on one
-//! thread. Lightweight enough to have many of them.
+//! A very small and fast executor for one Future. Lightweight enough
+//! to have many of them.
 //!
 //! Primarily useful for test suites where you want to step through
 //! execution and make assertions about state, but also useful for
@@ -33,64 +33,45 @@
 //! pin!(future);
 //! assert_eq!(unsafe { my_executor.as_mut().poll(&mut future) }, Poll::Ready(true));
 //! ```
-//!
-//! Warning: I mean it when I say this is for one thread. I can't tell
-//! you exactly what will happen if you wake it on another thread, but
-//! it probably won't be good!
-
 #![no_std]
 
 use core::future::Future;
-use core::mem::transmute;
 use core::pin::Pin;
-use core::ptr::{null, null_mut};
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use pin_project_lite::pin_project;
 
 const VTABLE: RawWakerVTable =
     RawWakerVTable::new(
         |data: *const ()| RawWaker::new(data, &VTABLE), // clone
         |data: *const ()| unsafe { // wake
-            let d: *const *mut u32 = transmute(data);
-            **d += 1;
+            let d: *const AtomicUsize = data.cast();
+            (*d).fetch_add(1, Relaxed);
         },
         |data: *const ()| unsafe { // wake by ref
-            let d: *const *mut u32 = transmute(data);
-            **d += 1;
+            let d: *const AtomicUsize = data.cast();
+            (*d).fetch_add(1, Relaxed);
         },
         |_data: *const ()| (), //drop
     );
 
-pin_project! {
-    /// A very small and fast executor for one Future on one thread.
-    ///
-    /// Primarily designed for test suites where you want to step
-    /// through execution and make assertions about state.
-    pub struct Wookie {
-        counter: u32,
-        counter_ref: *mut u32,
-        counter_ref_ref: *const *mut u32,
-    }
+/// A very small and fast executor for one Future on one thread.
+///
+/// Primarily designed for test suites where you want to step
+/// through execution and make assertions about state.
+pub struct Wookie {
+    counter: AtomicUsize,
 }
     
 impl Wookie {
     #[doc(hidden)]
     #[inline(always)]
     pub fn new() -> Wookie {
-        Wookie {
-            counter: 0,
-            counter_ref: null_mut(),
-            counter_ref_ref: null(),
-        }
+        Wookie { counter: AtomicUsize::new(0) }
     }
-    #[doc(hidden)]
-    #[inline(always)]
-    // Makes our internal pointers actually point. Called by
-    // `wookie!()` and `woke!()` after pinning.
-    pub fn repoint(self: Pin<&mut Self>) {
-        let this = self.project();
-        *this.counter_ref = this.counter as *mut u32;
-        *this.counter_ref_ref = this.counter_ref as *const *mut u32;
+
+    unsafe fn project(self: Pin<&mut Self>) -> &mut Self {
+        Pin::get_unchecked_mut(self)
     }
 }
 
@@ -99,31 +80,30 @@ impl Wookie {
     /// Returns how many times the waker has been woken. This count is
     /// cumulative, it is never reset.
     ///
-    /// Safe if:
-    ///   * We have repointed (i.e. you constructed us with [`wookie!()`].
-    ///   * A Waker we created won't be woken on another thread.
-    ///   * You do not wake after self has dropped
+    /// # Safety
+    ///
+    /// Safe if you do not wake after self has dropped
     #[inline(always)]
-    pub unsafe fn count(self: Pin<&mut Self>) -> u32 {
-        *self.project().counter
+    pub unsafe fn count(self: Pin<&mut Self>) -> usize {
+        self.project().counter.load(Relaxed)
     }
 
     /// Creates a new Waker that will mark our future as to be woken
     /// next poll.
     ///
-    /// Safe if:
-    ///   * We have repointed (i.e. you constructed us with [`wookie!()`].
-    ///   * A Waker we created won't be woken on another thread.
-    ///   * you do not wake after self has dropped
+    /// # Safety
+    ///
+    /// Safe if you do not wake after self has dropped
     #[inline(always)]
     pub unsafe fn waker(self: Pin<&mut Self>) -> Waker {
-        Waker::from_raw(RawWaker::new(transmute(*self.project().counter_ref_ref), &VTABLE))
+        Waker::from_raw(RawWaker::new((&self.project().counter as *const AtomicUsize).cast(), &VTABLE))
     }
 
     /// Polls the provided pinned future once.
     /// 
-    /// Safe if you do not send the Waker to another thread.
-    /// (Waker is Send and we are not so it's an lies!)
+    /// # Safety
+    ///
+    /// You must not wake after self has dropped.
     #[inline(always)]
     pub unsafe fn poll<T>(
         self: Pin<&mut Self>,
@@ -138,22 +118,21 @@ impl Wookie {
     /// Polls the provided pinned future so long as the previous
     /// poll caused one or more wakes.
     /// 
-    /// Safe if:
-    ///   * you do not send the Waker to another thread (Waker is Send
-    ///     and we are not so it's an lies!)
-    ///   * you do not wake after self has dropped
+    /// # Safety
+    ///
+    /// You must not wake after self has dropped.
     #[inline(always)]
     pub unsafe fn poll_while_woken<T>(
         self: Pin<&mut Self>,
         future: &mut Pin<&mut impl Future<Output=T>>
     ) -> Poll<T> {
         let this = self.project();
-        let waker = Waker::from_raw(RawWaker::new(transmute(*this.counter_ref_ref), &VTABLE));
+        let waker = Waker::from_raw(RawWaker::new((&this.counter as *const AtomicUsize).cast(), &VTABLE));
         let mut context = Context::from_waker(&waker);
         loop {
-            let count = *this.counter;
+            let count = this.counter.load(Relaxed);
             if let Poll::Ready(r) = future.as_mut().poll(&mut context) { return Poll::Ready(r); }
-            if *this.counter == count { return Poll::Pending; }
+            if this.counter.load(Relaxed) == count { return Poll::Pending; }
         }
     }
 }
@@ -171,7 +150,7 @@ impl Wookie {
 /// pin!(future);
 /// assert_eq!(unsafe { my_executor.as_mut().poll(&mut future) }, Poll::Ready(true));
 /// ```
-#[macro_export]
+#[macro_export ]
 macro_rules! wookie {
     ($name:ident) => {
         let mut $name = unsafe { $crate::Wookie::new() };
@@ -193,28 +172,23 @@ pin_project! {
 
 impl<F: Future> Woke<F> {
 
-    #[doc(hidden)]
-    #[inline(always)]
-    pub fn repoint(self: Pin<&mut Self>) {
-        self.project().wookie.repoint();
-    }
-
     /// Returns how many times the waker has been woken. This count is
     /// cumulative, it is never reset.
     ///
-    /// Safe provided a Waker we created won't be woken on another thread.
+    /// # Safety
+    ///
+    /// You must not wake after self has dropped.
     #[inline(always)]
-    pub unsafe fn count(self: Pin<&mut Self>) -> u32 {
+    pub unsafe fn count(self: Pin<&mut Self>) -> usize {
         self.project().wookie.count()
     }
 
     /// Creates a new Waker that will mark our future as to be woken
     /// next poll.
     ///
-    /// Safe if:
-    ///   * you do not send the Waker to another thread (Waker is Send
-    ///     and we are not so it's an lies!)
-    ///   * you do not wake after self has dropped
+    /// # Safety
+    ///
+    /// You must not wake after self has dropped.
     #[inline(always)]
     pub unsafe fn waker(self: Pin<&mut Self>) -> Waker {
         self.project().wookie.waker()
@@ -222,8 +196,9 @@ impl<F: Future> Woke<F> {
 
     /// Polls the contained future once.
     /// 
-    /// Safe if you do not send the Waker to another thread.
-    /// (Waker is Send and we are not so it's an lies!)
+    /// # Safety
+    ///
+    /// You must not wake after self has dropped.
     #[inline(always)]
     pub unsafe fn poll(
         self: Pin<&mut Self>
@@ -235,10 +210,9 @@ impl<F: Future> Woke<F> {
     /// Polls the contained future so long as the previous poll caused
     /// one or more wakes.
     /// 
-    /// Safe if:
-    ///   * you do not send the Waker to another thread (Waker is Send
-    ///     and we are not so it's an lies!)
-    ///   * you do not wake after self has dropped
+    /// # Safety
+    ///
+    /// You must not wake after self has dropped.
     #[inline(always)]
     pub unsafe fn poll_while_woken(
         self: Pin<&mut Self>
@@ -275,12 +249,10 @@ macro_rules! woke {
         let mut $name = unsafe { $crate::Woke::new($name) };
         #[allow(unused_mut)]
         let mut $name = unsafe { core::pin::Pin::new_unchecked(&mut $name) };
-        $name.as_mut().repoint();
     };
     ($name:ident : $future:expr) => {
         let mut $name = unsafe { $crate::Woke::new($future) };
         #[allow(unused_mut)]
         let mut $name = unsafe { core::pin::Pin::new_unchecked(&mut $name) };
-        $name.as_mut().repoint();
     }
 }

@@ -51,10 +51,6 @@ pin!(future);
 assert_eq!(unsafe { my_executor.as_mut().poll(&mut future) }, Poll::Ready(true));
 ```
 
-Warning: I mean it when I say this is for one thread. I can't tell you
-exactly what will happen if you wake it on another thread, but it
-probably won't be good!
-
 ## Copyright and License
 
 Copyright (c) 2021 wookie contributors
