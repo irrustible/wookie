@@ -4,56 +4,83 @@
 [![Package](https://img.shields.io/crates/v/wookie.svg)](https://crates.io/crates/wookie)
 [![Documentation](https://docs.rs/wookie/badge.svg)](https://docs.rs/wookie)
 
-A very small and fast executor for one Future on one
-thread. Lightweight enough to have many of them.
+Single future stepping executors for test suites and benchmarking.
 
 ## Status: beta
 
-The api might change, but as far as we know it's correct and it hasn't
-crashed the test suite we wrote it for yet.
+We've done a few iterations now and we quite like it how it is now and
+believe it to be correct.
 
-It is designed for use in test suites, it's obviously terrible as
-executors go for production so keep it to development?
+It is designed for use in test suites and it's probably not that
+useful in production. Don't do that.
 
 ## Usage
 
-Wookie is a single future executor. It's primarily useful for test
-suites where you want to step through execution and make assertions
-about state, but also useful for benchmarks or anywhere else where you
-don't need more.
+The primary user interface is the `wookie!` macro, which wraps a
+future with an executor and pins it on the stack.:
 
-The easiest way to use this is with the `woke!()` macro, which
-packages up a future together with an executor for convenient polling
-and pins it on the stack:
-
-```
+```rust
 use core::task::Poll;
-use wookie::woke;
-let future = async { true };
-woke!(future);
-assert_eq!(unsafe { future.as_mut().poll() }, Poll::Ready(true));
-// or in one step...
-woke!(future: async { true });
-assert_eq!(unsafe { future.as_mut().poll() }, Poll::Ready(true));
-```
-
-In some circumstances, you might need a `Waker` without actually
-having a Future to execute. For this you can use the `wookie!()` macro
-which creates just the executor and pins it to the stack:
-
-```
-use core::task::Poll;
-use futures_micro::pin;
 use wookie::wookie;
-wookie!(my_executor);
+wookie!(future: async { true });
+assert_eq!(future.poll(), Poll::Ready(true));
+
+// you can also just give a variable name if you have one:
 let future = async { true };
-pin!(future);
-assert_eq!(unsafe { my_executor.as_mut().poll(&mut future) }, Poll::Ready(true));
+wookie!(future);
+assert_eq!(future.poll(), Poll::Ready(true));
+
+// we can find out about the state of wakers any time:
+assert_eq!(future.cloned(), 0);
+assert_eq!(future.dropped(), 0);
+assert_eq!(future.woken(), 0);
+// or equivalently...
+future.stats().assert(0, 0, 0);
 ```
+
+If you do not have access to an allocator, you can use the `local!`
+macro instead, however, polling is unsafe and you must be very careful
+to maintain the invariants described in the `safety` sections of the
+`Local` methods.
+
+```rust
+use core::task::Poll;
+use wookie::local;
+local!(future: async { true });
+assert_eq!(unsafe { future.poll() }, Poll::Ready(true));
+
+// you can also just give a variable name if you have one:
+let future = async { true };
+local!(future);
+assert_eq!(unsafe { future.poll() }, Poll::Ready(true));
+
+// we can find out about the state of wakers any time:
+assert_eq!(future.cloned(), 0);
+assert_eq!(future.dropped(), 0);
+assert_eq!(future.woken(), 0);
+// or equivalently...
+future.stats().assert(0, 0, 0);
+```
+
+For benchmarking, we provide the `dummy!` macro, whose waker does
+nothing, but quite quickly.
+
+```rust
+use core::task::Poll;
+use wookie::dummy;
+dummy!(future: async { true });
+assert_eq!(future.poll(), Poll::Ready(true));
+```
+
+## Features
+
+Default features: `alloc`.
+
+* `alloc` - enables use of an allocator. Required by `Wookie` / `wookie!`.
 
 ## Copyright and License
 
-Copyright (c) 2021 wookie contributors
+Copyright (c) 2021 James Laver, wookie contributors
 
 [Licensed](LICENSE) under Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0),
 with LLVM Exceptions (https://spdx.org/licenses/LLVM-exception.html).

@@ -1,8 +1,8 @@
 [package]
 name = "wookie"
-version = "0.2.0"
-description = "A very small and fast executor for one Future for your tests and benches."
-keywords = ["async", "futures", "executor", "no-std"]
+version = "0.3.0"
+description = "Single future stepping executors for test suites and benchmarking. no-std compatible."
+keywords = ["async", "futures", "executor", "no-std", "stepping"]
 categories = ["asynchronous", "concurrency", "no-std"]
 authors = ["James Laver <james.laver@gmail.com>"]
 homepage = "https://github.com/irrustible/wookie"
@@ -12,9 +12,10 @@ edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 
+[features]
+default = ["alloc"]
+alloc = []
+
 [dependencies]
+dummy-waker="1"
 pin-project-lite = "0.2.7"
-
-[dev-dependencies]
-futures-micro = "0.5"
-
