@@ -1,4 +1,4 @@
-//! Single future stepping executors for test suites and benchmarking.
+//! Async test/bench toolkit including single stepping executors. No-std compatible.
 //!
 //! The primary user interface is the [`wookie!`] macro, which wraps a
 //! future with an executor and pins it on the stack.:
@@ -56,6 +56,25 @@
 //! assert_eq!(future.poll(), Poll::Ready(true));
 //! ```
 //!
+//! We have [`assert_pending!`] and [`assert_ready!`] to save some
+//! typing in assertions:
+//!
+//! ```
+//! use wookie::*;
+//! use core::task::Poll;
+//! assert_pending!(Poll::<i32>::Pending); // pass
+//! // assert_pending!(Poll::Ready(())); // would fail
+//!
+//! // With 1 arg, assert_ready will returning the unwrapped value.
+//! assert_eq!(42, assert_ready!(Poll::Ready(42)));
+//! // assert_ready!(Poll::<i32>::Pending); // would fail
+//!
+//! // With 2 args, it's like [`assert_eq`] on the unwrapped value.
+//! assert_ready!(42, Poll::Ready(42));
+//! // assert_ready!(Poll::<i32>::Pending); // would fail
+//! // assert_ready!(42, Poll::Ready(420)); // would fail
+//! ```
+//!
 //! ## Features
 //!
 //! Default features: `alloc`.
@@ -99,5 +118,57 @@ impl Stats {
     /// Assert that `cloned`, `dropped` and `woken` are the provided values.
     pub fn assert(&self, cloned: u16, dropped: u16, woken: u16) {
         assert_eq!((cloned, dropped, woken), (self.cloned, self.dropped, self.woken));
+    }
+}
+
+#[macro_export]
+/// Asserts that a [`Poll`] is a [`Poll::Pending`]
+///
+/// ## Examples
+///
+/// ```
+/// use wookie::assert_pending;
+/// use core::task::Poll;
+/// assert_pending!(Poll::<i32>::Pending); // pass
+/// // assert_pending!(Poll::Ready(())); // would fail
+/// ```
+macro_rules! assert_pending {
+    ($expr:expr) => {
+        if let Poll::Ready(r) = $expr {
+            panic!("Expected Poll::Pending, got Poll::Ready({:?})!", r);
+        }
+    }
+}
+
+#[macro_export]
+/// Asserts that a [`Poll`] is a [`Poll::Ready`]
+///
+/// ## Examples
+///
+/// ```
+/// use wookie::assert_ready;
+/// use core::task::Poll;
+///
+/// // With 1 arg, just checks for ready, returning the unwrapped value.
+/// assert_eq!(42, assert_ready!(Poll::Ready(42)));
+/// // assert_ready!(Poll::<i32>::Pending); // would fail
+///
+/// // With 2 args, it's like [`assert_eq`] on the unwrapped value.
+/// assert_ready!(42, Poll::Ready(42));
+/// // assert_ready!(Poll::<i32>::Pending); // would fail
+/// // assert_ready!(42, Poll::Ready(420)); // would fail
+/// ```
+macro_rules! assert_ready {
+    ($expr:expr) => {
+        match $expr {
+            Poll::Ready(r) => r,
+            Poll::Pending => panic!("Expected Poll::Ready, got Poll::Pending!"),
+        }
+    };
+    ($expected:expr, $expr:expr) => {
+        match $expr {
+            Poll::Ready(r) => assert_eq!($expected, r),
+            Poll::Pending => panic!("Expected Poll::Ready, got Poll::Pending!"),
+        }
     }
 }

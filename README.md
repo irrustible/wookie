@@ -4,15 +4,12 @@
 [![Package](https://img.shields.io/crates/v/wookie.svg)](https://crates.io/crates/wookie)
 [![Documentation](https://docs.rs/wookie/badge.svg)](https://docs.rs/wookie)
 
-Single future stepping executors for test suites and benchmarking.
+Async test/bench toolkit including single stepping executors. No-std compatible.
 
 ## Status: beta
 
 We've done a few iterations now and we quite like it how it is now and
 believe it to be correct.
-
-It is designed for use in test suites and it's probably not that
-useful in production. Don't do that.
 
 ## Usage
 
@@ -70,6 +67,25 @@ use core::task::Poll;
 use wookie::dummy;
 dummy!(future: async { true });
 assert_eq!(future.poll(), Poll::Ready(true));
+```
+
+We have `assert_pending!` and `assert_ready!` to save some
+typing in assertions:
+
+```
+use wookie::*;
+use core::task::Poll;
+assert_pending!(Poll::<i32>::Pending); // pass
+// assert_pending!(Poll::Ready(())); // would fail
+
+// With 1 arg, assert_ready will returning the unwrapped value.
+assert_eq!(42, assert_ready!(Poll::Ready(42)));
+// assert_ready!(Poll::<i32>::Pending); // would fail
+
+// With 2 args, it's like [`assert_eq`] on the unwrapped value.
+assert_ready!(42, Poll::Ready(42));
+// assert_ready!(Poll::<i32>::Pending); // would fail
+// assert_ready!(42, Poll::Ready(420)); // would fail
 ```
 
 ## Features

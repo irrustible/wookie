@@ -1,9 +1,9 @@
 [package]
 name = "wookie"
-version = "0.3.0"
-description = "Single future stepping executors for test suites and benchmarking. no-std compatible."
-keywords = ["async", "futures", "executor", "no-std", "stepping"]
-categories = ["asynchronous", "concurrency", "no-std"]
+version = "0.3.1"
+description = "Async test/bench toolkit including single stepping executors. No-std compatible."
+keywords = ["async", "futures", "executor", "testing", "stepping"]
+categories = ["asynchronous", "concurrency", "development-tools::testing", "no-std"]
 authors = ["James Laver <james.laver@gmail.com>"]
 homepage = "https://github.com/irrustible/wookie"
 repository = "https://github.com/irrustible/wookie"
