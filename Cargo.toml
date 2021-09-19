@@ -1,6 +1,6 @@
 [package]
 name = "wookie"
-version = "0.3.1"
+version = "0.3.2"
 description = "Async test/bench toolkit including single stepping executors. No-std compatible."
 keywords = ["async", "futures", "executor", "testing", "stepping"]
 categories = ["asynchronous", "concurrency", "development-tools::testing", "no-std"]
@@ -11,6 +11,9 @@ documentation = "https://docs.rs/wookie"
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
+
+[package.metadata]
+msrv = "1.51.0"
 
 [features]
 default = ["alloc"]

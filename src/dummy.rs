@@ -75,3 +75,31 @@ macro_rules! dummy {
         let mut $name = unsafe { core::pin::Pin::new_unchecked(&mut $name) };
     }
 }
+
+/// Like [`dummy!`] but wraps in a [`ManuallyDrop`].
+///
+/// Warning: this has the potential to cause resource leakage, do not
+/// use this for on anything that really ought to be dropped.
+///
+/// ## Example
+///
+/// ```
+/// use core::task::Poll;
+/// use wookie::leaky_dummy;
+/// leaky_dummy!(future: async { true });
+/// assert_eq!(future.poll(), Poll::Ready(true));
+/// ```
+#[cfg(feature="alloc")]
+#[macro_export]
+macro_rules! leaky_dummy {
+    ($name:ident) => {
+        let mut $name = unsafe { $crate::Dummy::new($name) };
+        #[allow(unused_mut)]
+        let mut $name = unsafe { core::pin::Pin::new_unchecked(&mut $name) };
+    };
+    ($name:ident : $future:expr) => {
+        let mut $name = unsafe { $crate::Dummy::new($future) };
+        #[allow(unused_mut)]
+        let mut $name = unsafe { core::pin::Pin::new_unchecked(&mut $name) };
+    }
+}

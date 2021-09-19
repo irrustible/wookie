@@ -88,6 +88,8 @@ assert_ready!(42, Poll::Ready(42));
 // assert_ready!(42, Poll::Ready(420)); // would fail
 ```
 
+MSRV: 1.51.0
+
 ## Features
 
 Default features: `alloc`.
